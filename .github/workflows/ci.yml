@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: unit test + codegen check (${{ matrix.os }} / py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.9', '3.12']
+
+    # ⚠️ 必须显式指定编码：windows-latest 上 Python 的 stdout 默认是 cp1252，
+    # 而本项目的演示与测试输出全是中文，会直接 UnicodeEncodeError 挂掉，
+    # 而且报错长得像测试失败（Ran N tests ... FAILED），极易误判成逻辑问题。
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: 语法检查（编译全部源文件）
+        run: python -m compileall -q mbd tests tools
+
+      - name: 单元测试
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: 跑全部演示（确认 CLI 可用）
+        run: python -m mbd all
+
+      - name: 查看 C 编译器（代码生成校验需要）
+        shell: bash
+        run: |
+          for cc in gcc cc clang; do
+            if command -v "$cc" >/dev/null 2>&1; then
+              echo "found compiler: $cc -> $(command -v $cc)"
+              "$cc" --version | head -n 1
+              exit 0
+            fi
+          done
+          echo "::warning::本机没有 C 编译器，一致性校验会被跳过（这一步不算失败）"
+
+      - name: ⭐ 模型 ↔ 生成代码 逐位一致性校验
+        shell: bash
+        run: |
+          # 判据是"最大绝对误差 0.0"，任何非零都让 CI 红
+          python tools/codegen_check.py
+
+      - name: 自检 —— 生成代码必须能过严格编译
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess, sys, tempfile
+          sys.path.insert(0, 'tools')
+          from mbd import codegen, library
+          import codegen_check
+
+          cc = codegen_check.find_cc()
+          if cc is None:
+              print('没有 C 编译器，跳过')
+              sys.exit(0)
+
+          bad = []
+          for name in sorted(library.LIBRARY):
+              work = tempfile.mkdtemp(prefix='mbdstrict_')
+              hp, cp = codegen.write_files(library.get(name), work, model_name=name)
+              p = subprocess.run([cc, '-std=c99', '-Wall', '-Wextra', '-Wpedantic',
+                                  '-Werror', '-O2', '-c', cp, '-o', os.path.join(work, 'x.o')],
+                                 capture_output=True, text=True)
+              ok = p.returncode == 0
+              print('%-24s 严格编译 %s' % (name, 'OK' if ok else 'FAIL'))
+              if not ok:
+                  print(p.stderr)
+                  bad.append(name)
+          if bad:
+              print('FAILED:', bad)
+              sys.exit(1)
+          print('全部通过 -std=c99 -Wall -Wextra -Wpedantic -Werror -O2')
+          PY

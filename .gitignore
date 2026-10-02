@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# 测试与覆盖率产物
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# 代码生成 / 编译产物（跑演示时会生成，不进仓库）
+gen/
+*.o
+*.obj
+*.exe
+runner
+a.out
+
+# 编辑器与系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
