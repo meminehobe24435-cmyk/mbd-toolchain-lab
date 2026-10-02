@@ -75,7 +75,7 @@ jobs:
           for name in sorted(library.LIBRARY):
               work = tempfile.mkdtemp(prefix='mbdstrict_')
               hp, cp = codegen.write_files(library.get(name), work, model_name=name)
-              p = subprocess.run([cc, '-std=c99', '-Wall', '-Wextra', '-Wpedantic',
+              p = subprocess.run([cc, '-std=c99', '-ffp-contract=off', '-Wall', '-Wextra', '-Wpedantic',
                                   '-Werror', '-O2', '-c', cp, '-o', os.path.join(work, 'x.o')],
                                  capture_output=True, text=True)
               ok = p.returncode == 0

@@ -172,7 +172,8 @@ def _check_custom(model, steps=200):
                 f.write('%r\n' % (0.3 * ((i % 20) - 10)))
         exe = os.path.join(work, 'runner.exe' if os.name == 'nt' else 'runner')
         import subprocess
-        p = subprocess.run([cc, '-std=c99', '-Wall', '-Wextra', '-Werror', '-O0',
+        # -ffp-contract=off：见 tools/codegen_check.py 里的说明（clang/ARM64 会做 FMA 收缩）
+        p = subprocess.run([cc, '-std=c99', '-ffp-contract=off', '-Wall', '-Wextra', '-Werror', '-O0',
                             driver, cp, '-o', exe, '-lm'],
                            capture_output=True, text=True, cwd=work)
         if p.returncode != 0:

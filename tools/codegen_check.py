@@ -127,7 +127,11 @@ def check(model_name, steps=400, keep=False, verbose=True):
                 f.write(','.join(vals) + '\n')
 
         exe = os.path.join(work, 'runner.exe' if os.name == 'nt' else 'runner')
-        cmd = [cc, '-std=c99', '-Wall', '-Wextra', '-Werror', '-O0',
+        # ⚠️ `-ffp-contract=off` 不能省：clang（macOS / ARM64）默认允许把 a*b+c 收缩成 fma，
+        #    会让生成代码与模型**在最后一位上不同**（实测 max diff 6.8e-13）。
+        #    gcc 在 -std=c99 下默认不收缩，所以只在 Linux/Windows 上跑是发现不了这个问题的。
+        #    真实 MBD 工具链同样要显式指定严格 IEEE 语义，否则"逐位一致"根本无从谈起。
+        cmd = [cc, '-std=c99', '-ffp-contract=off', '-Wall', '-Wextra', '-Werror', '-O0',
                driver, cp, '-o', exe, '-lm']
         p = subprocess.run(cmd, capture_output=True, text=True, cwd=work)
         if p.returncode != 0:
